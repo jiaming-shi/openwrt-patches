@@ -1,0 +1,28 @@
+From fb956866b3ecebf18bc8bdd8406aae3202579121 Mon Sep 17 00:00:00 2001
+From: Jiaming Shi <jiaming.shih@gmail.com>
+Date: Tue, 24 Jun 2025 04:07:14 +0000
+Subject: [PATCH 1/2] kernel: add option for BPF_STREAM_PARSER
+
+Signed-off-by: Jiaming Shi <jiaming.shih@gmail.com>
+---
+ config/Config-kernel.in | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/config/Config-kernel.in b/config/Config-kernel.in
+index 64c8c63466..c94370f1a8 100644
+--- a/config/Config-kernel.in
++++ b/config/Config-kernel.in
+@@ -574,6 +574,10 @@ config KERNEL_BPF_KPROBE_OVERRIDE
+ 	depends on KERNEL_KPROBES
+ 	default n
+ 
++config KERNEL_BPF_STREAM_PARSER
++	bool "Allow a TCP stream parser to be used with BPF_MAP_TYPE_SOCKMAP"
++	depends on KERNEL_CGROUP_BPF
++
+ config KERNEL_AIO
+ 	bool "Compile the kernel with asynchronous IO support"
+ 	default y if !SMALL_FLASH
+-- 
+2.39.5
+

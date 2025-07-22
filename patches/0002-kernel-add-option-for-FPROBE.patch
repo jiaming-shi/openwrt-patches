@@ -1,0 +1,38 @@
+From 06634f123b4a8b485f3a0db25ddcfaf8b7fac334 Mon Sep 17 00:00:00 2001
+From: Jiaming Shi <jiaming.shih@gmail.com>
+Date: Wed, 25 Jun 2025 15:43:33 +0000
+Subject: [PATCH 2/2] kernel: add option for FPROBE
+
+Signed-off-by: Jiaming Shi <jiaming.shih@gmail.com>
+---
+ config/Config-kernel.in | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+diff --git a/config/Config-kernel.in b/config/Config-kernel.in
+index c94370f1a8..15035dea01 100644
+--- a/config/Config-kernel.in
++++ b/config/Config-kernel.in
+@@ -382,6 +382,20 @@ config KERNEL_DYNAMIC_FTRACE
+ 	bool "Enable/disable function tracing dynamically"
+ 	depends on KERNEL_FUNCTION_TRACER
+ 
++config KERNEL_DYNAMIC_FTRACE_WITH_REGS
++	def_bool y
++	depends on KERNEL_DYNAMIC_FTRACE
++
++config KERNEL_FPROBE
++	bool "Kernel Function Probe (fprobe)"
++	depends on KERNEL_FUNCTION_TRACER && KERNEL_DYNAMIC_FTRACE_WITH_REGS
++	default n
++
++config KERNEL_FPROBE_EVENTS
++	bool "Enable fprobe-based dynamic events"
++	depends on KERNEL_FPROBE
++	default y
++
+ config KERNEL_FUNCTION_PROFILER
+ 	bool "Function profiler"
+ 	depends on KERNEL_FUNCTION_TRACER
+-- 
+2.39.5
+
