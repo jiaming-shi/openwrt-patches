@@ -8,11 +8,9 @@ Signed-off-by: Jiaming Shi <jiaming.shih@gmail.com>
  config/Config-kernel.in | 14 ++++++++++++++
  1 file changed, 14 insertions(+)
 
-diff --git a/config/Config-kernel.in b/config/Config-kernel.in
-index c94370f1a8..15035dea01 100644
 --- a/config/Config-kernel.in
 +++ b/config/Config-kernel.in
-@@ -382,6 +382,20 @@ config KERNEL_DYNAMIC_FTRACE
+@@ -375,6 +375,20 @@ config KERNEL_DYNAMIC_FTRACE
  	bool "Enable/disable function tracing dynamically"
  	depends on KERNEL_FUNCTION_TRACER
  
@@ -33,6 +31,3 @@ index c94370f1a8..15035dea01 100644
  config KERNEL_FUNCTION_PROFILER
  	bool "Function profiler"
  	depends on KERNEL_FUNCTION_TRACER
--- 
-2.39.5
-

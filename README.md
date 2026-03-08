@@ -22,3 +22,18 @@ Patches for OpenWrt.
     cp -r /path/to/patches ./
     quilt push -a
     ```
+
+### Refreshing patches
+
+```shell
+quilt pop -a
+quilt push # patch1
+quilt refresh
+quilt push # patch2
+quilt refresh
+# ...
+
+# while quilt push; do
+#   quilt refresh
+# done
+```
