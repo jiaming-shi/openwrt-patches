@@ -1,0 +1,222 @@
+name: Build OpenWrt
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  prepare-release:
+    name: Prepare release
+    runs-on: self-hosted
+
+    steps:
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+
+  build:
+    name: Build ${{ matrix.name }}
+    runs-on: self-hosted
+    needs: prepare-release
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - name: x86/64
+            asset_suffix: x86-64
+            config_path: targets/x86/64/config.buildinfo
+          - name: mediatek/filogic
+            asset_suffix: mediatek-filogic
+            config_path: targets/mediatek/filogic/config.buildinfo
+
+    env:
+      OPENWRT_TAG: ${{ github.ref_name }}
+      FORCE_UNSAFE_CONFIGURE: "1"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate tag format
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "${OPENWRT_TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Unsupported tag format: ${OPENWRT_TAG}" >&2
+            exit 1
+          fi
+
+      - name: Set build directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "OPENWRT_DIR=${RUNNER_TEMP}/openwrt-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${{ matrix.asset_suffix }}" >> "${GITHUB_ENV}"
+
+      - name: Resolve source branch
+        id: source-branch
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mapfile -t branches < <(
+            git for-each-ref --format='%(refname:short)' --contains "${GITHUB_SHA}" refs/remotes/origin | \
+              grep -v '^origin/HEAD$' | \
+              sed 's#^origin/##'
+          )
+
+          if [[ "${#branches[@]}" -eq 0 ]]; then
+            echo "Unable to determine the source branch for ${GITHUB_SHA}" >&2
+            exit 1
+          fi
+
+          if [[ "${#branches[@]}" -ne 1 ]]; then
+            printf 'Expected exactly one source branch for %s, found: %s\n' "${GITHUB_SHA}" "${branches[*]}" >&2
+            exit 1
+          fi
+
+          echo "name=${branches[0]}" >> "${GITHUB_OUTPUT}"
+
+      - name: Install build dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          apt-get update
+          apt-get install -y \
+            build-essential \
+            clang \
+            file \
+            flex \
+            bison \
+            g++ \
+            gawk \
+            gcc-multilib \
+            g++-multilib \
+            gettext \
+            git \
+            libelf-dev \
+            libncurses-dev \
+            libssl-dev \
+            python3-setuptools \
+            quilt \
+            rsync \
+            swig \
+            unzip \
+            wget \
+            zlib1g-dev
+
+      - name: Clone OpenWrt source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone https://git.openwrt.org/openwrt/openwrt.git "${OPENWRT_DIR}"
+          git -C "${OPENWRT_DIR}" checkout -b "${{ steps.source-branch.outputs.name }}" "${OPENWRT_TAG}"
+
+      - name: Apply local patches
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp .quiltrc "${HOME}/.quiltrc"
+          cp -r patches "${OPENWRT_DIR}/"
+          cd "${OPENWRT_DIR}"
+          quilt push -a
+
+      - name: Update feeds and install packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "${OPENWRT_DIR}"
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      - name: Prepare target configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp "${{ matrix.config_path }}" "${OPENWRT_DIR}/.config"
+          cd "${OPENWRT_DIR}"
+          make defconfig
+
+      - name: Build firmware
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "${OPENWRT_DIR}"
+          make -j"$(nproc)" download
+          make -j"$(nproc)" world
+
+      - name: Prepare target package indexes
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "${OPENWRT_DIR}"
+
+          target_subpath="${{ matrix.name }}"
+
+          kernelver="$(
+            env TOPDIR="$(pwd)" make --no-print-directory -C target/linux/ \
+              val.LINUX_VERSION val.LINUX_RELEASE val.LINUX_VERMAGIC | \
+              xargs printf '%s-%s-%s\n'
+          )"
+
+          kmoddir="bin/targets/${target_subpath}/kmods/${kernelver}"
+          mkdir -p "${kmoddir}"
+
+          rsync --remove-source-files \
+            --include='/kmod-*.ipk' \
+            --include='/kmod-*.apk' \
+            --exclude='*' \
+            -va \
+            "bin/targets/${target_subpath}/packages/" \
+            "${kmoddir}/"
+
+          make -j"$(nproc)" package/index V=s CONFIG_SIGNED_PACKAGES=
+          make -j"$(nproc)" package/index V=s CONFIG_SIGNED_PACKAGES= PACKAGE_SUBDIRS="${kmoddir}/"
+          make -j1 checksum V=s
+
+      - name: Sign APK package indexes
+        shell: bash
+        env:
+          APKSIGNKEY: ${{ secrets.APKSIGNKEY }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${APKSIGNKEY}" ]]; then
+            echo "Missing required secret: APKSIGNKEY" >&2
+            exit 1
+          fi
+
+          cd "${OPENWRT_DIR}"
+          target_subpath="${{ matrix.name }}"
+          install -m 600 /dev/null apk-signing-key.pem
+          printf '%s\n' "${APKSIGNKEY}" > apk-signing-key.pem
+          apk_bin="$(pwd)/staging_dir/host/bin/apk"
+          sign_key="$(pwd)/apk-signing-key.pem"
+
+          find "bin/targets/${target_subpath}/" "bin/targets/${target_subpath}/kmods/" -mindepth 1 -maxdepth 2 -type f -name "packages.adb" -print0 | \
+            while IFS= read -r -d '' file; do
+              "${apk_bin}" adbsign --allow-untrusted --sign-key "${sign_key}" "${file}"
+            done
+
+          find bin/packages/ -type f -name "packages.adb" -print0 | \
+            while IFS= read -r -d '' file; do
+              "${apk_bin}" adbsign --allow-untrusted --sign-key "${sign_key}" "${file}"
+            done
+
+      - name: Archive target outputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "${OPENWRT_DIR}"
+          tar -czf "openwrt-${OPENWRT_TAG}-${{ matrix.asset_suffix }}.tar.gz" bin
+
+      - name: Publish release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.OPENWRT_DIR }}/openwrt-${{ env.OPENWRT_TAG }}-${{ matrix.asset_suffix }}.tar.gz
