@@ -37,7 +37,6 @@ jobs:
 
     env:
       OPENWRT_TAG: ${{ github.ref_name }}
-      FORCE_UNSAFE_CONFIGURE: "1"
 
     steps:
       - name: Checkout repository
@@ -59,6 +58,34 @@ jobs:
         run: |
           set -euo pipefail
           echo "OPENWRT_DIR=${RUNNER_TEMP}/openwrt-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${{ matrix.asset_suffix }}" >> "${GITHUB_ENV}"
+
+      - name: Install build dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            clang \
+            file \
+            flex \
+            bison \
+            g++ \
+            gawk \
+            gcc-multilib \
+            g++-multilib \
+            gettext \
+            git \
+            libelf-dev \
+            libncurses-dev \
+            libssl-dev \
+            python3-setuptools \
+            quilt \
+            rsync \
+            swig \
+            unzip \
+            wget \
+            zlib1g-dev
 
       - name: Resolve source branch
         id: source-branch
@@ -83,34 +110,6 @@ jobs:
           fi
 
           echo "name=${branches[0]}" >> "${GITHUB_OUTPUT}"
-
-      - name: Install build dependencies
-        shell: bash
-        run: |
-          set -euo pipefail
-          apt-get update
-          apt-get install -y \
-            build-essential \
-            clang \
-            file \
-            flex \
-            bison \
-            g++ \
-            gawk \
-            gcc-multilib \
-            g++-multilib \
-            gettext \
-            git \
-            libelf-dev \
-            libncurses-dev \
-            libssl-dev \
-            python3-setuptools \
-            quilt \
-            rsync \
-            swig \
-            unzip \
-            wget \
-            zlib1g-dev
 
       - name: Clone OpenWrt source
         shell: bash
@@ -209,14 +208,20 @@ jobs:
               "${apk_bin}" adbsign --allow-untrusted --sign-key "${sign_key}" "${file}"
             done
 
-      - name: Archive target outputs
+      - name: Archive full bin directory
         shell: bash
         run: |
           set -euo pipefail
           cd "${OPENWRT_DIR}"
           tar -czf "openwrt-${OPENWRT_TAG}-${{ matrix.asset_suffix }}.tar.gz" bin
 
-      - name: Publish release asset
+      - name: Publish release assets
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ env.OPENWRT_DIR }}/openwrt-${{ env.OPENWRT_TAG }}-${{ matrix.asset_suffix }}.tar.gz
+          files: |
+            ${{ env.OPENWRT_DIR }}/openwrt-${{ env.OPENWRT_TAG }}-${{ matrix.asset_suffix }}.tar.gz
+            ${{ env.OPENWRT_DIR }}/bin/targets/${{ matrix.name }}/openwrt-imagebuilder-*.tar.zst
+            ${{ env.OPENWRT_DIR }}/bin/targets/${{ matrix.name }}/openwrt-sdk-*.tar.zst
+            ${{ env.OPENWRT_DIR }}/bin/targets/${{ matrix.name }}/openwrt-toolchain-*.tar.zst
+            ${{ env.OPENWRT_DIR }}/bin/targets/${{ matrix.name }}/*combined-efi.img.gz
+            ${{ env.OPENWRT_DIR }}/bin/targets/${{ matrix.name }}/*sysupgrade.bin
