@@ -15,7 +15,7 @@ jobs:
 
     steps:
       - name: Create GitHub release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           generate_release_notes: true
 
@@ -216,7 +216,7 @@ jobs:
           tar -czf "openwrt-${OPENWRT_TAG}-${{ matrix.asset_suffix }}.tar.gz" bin
 
       - name: Publish release assets
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: |
             ${{ env.OPENWRT_DIR }}/openwrt-${{ env.OPENWRT_TAG }}-${{ matrix.asset_suffix }}.tar.gz
