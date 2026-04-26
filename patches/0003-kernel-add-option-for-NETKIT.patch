@@ -1,0 +1,18 @@
+--- a/config/Config-kernel.in
++++ b/config/Config-kernel.in
+@@ -579,6 +579,15 @@ config KERNEL_BPF_STREAM_PARSER
+ 	bool "Allow a TCP stream parser to be used with BPF_MAP_TYPE_SOCKMAP"
+ 	depends on KERNEL_CGROUP_BPF
+ 
++config KERNEL_NETKIT
++	bool "Compile the kernel with BPF-programmable network device support"
++	default y if KERNEL_DEBUG_INFO_BTF
++	help
++	  The netkit device is a virtual networking device where BPF programs
++	  can be attached to the device(s) transmission routine in order to
++	  implement the driver's internal logic. The device can be configured
++	  to operate in L3 or L2 mode.
++
+ config KERNEL_AIO
+ 	bool "Compile the kernel with asynchronous IO support"
+ 	default y if !SMALL_FLASH
