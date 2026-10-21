@@ -1,0 +1,36 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Jiaming Shi <jiaming.shih@gmail.com>
+Date: Wed, 21 Oct 2026 02:10:09 +0800
+Subject: [PATCH] kselftests-bpf: prevent target flags leaking to host tools
+
+OpenWrt exports empty CFLAGS and LDFLAGS from include/toplevel.mk. The
+BPF selftests append SAN_CFLAGS and SAN_LDFLAGS to these variables,
+which retain their exported state and are inherited by host tool builds.
+
+After switching target flags from EXTRA_CFLAGS to SAN_CFLAGS, the host
+libbpf build receives target compiler flags such as -fhonour-copts. The
+native compiler rejects this OpenWrt-specific option, causing the build
+to fail.
+
+Unexport CFLAGS and LDFLAGS before invoking the selftests build. Keep
+passing target flags through SAN_CFLAGS so target userspace and libbpf
+still receive them, without exporting the resulting flags to host tools.
+
+Fixes: 60827c1dc2cd ("kselftests-bpf: isolate target userspace compiler flags")
+Signed-off-by: Jiaming Shi <jiaming.shih@gmail.com>
+---
+ package/devel/kselftests-bpf/Makefile | 3 +++
+ 1 file changed, 3 insertions(+)
+
+--- a/package/devel/kselftests-bpf/Makefile
++++ b/package/devel/kselftests-bpf/Makefile
+@@ -42,6 +42,9 @@ MOD_TARGETS:= \
+ 
+ MAKE_PATH:=tools/testing/selftests/bpf
+ 
++# Keep target flags added by selftests out of the host tool environment.
++unexport CFLAGS LDFLAGS
++
+ # Use SAN_CFLAGS to cover target libbpf as well as userspace selftests,
+ # without passing target flags to host tools or kernel modules.
+ MAKE_VARS:= \

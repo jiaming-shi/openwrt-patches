@@ -2,3 +2,4 @@
 0002-kernel-add-option-for-FPROBE.patch
 0003-kernel-add-option-for-NETKIT.patch
 0004-mediatek-filogic-fix-EAX17-FIT-rootfs-dependency.patch
+0005-kselftests-bpf-fix-host-tool-compiler-flags.patch
